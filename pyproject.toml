@@ -1,0 +1,83 @@
+[project]
+name = "chet-ai-backend"
+version = "0.1.0"
+description = "CHET.ai — RAG backend for Chetan Marathe's portfolio"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.8.0",
+    "pydantic-settings>=2.4.0",
+    "motor>=3.5.0",
+    "redis>=5.0.0",
+    "qdrant-client>=1.11.0",
+    "httpx>=0.27.0",
+    "tenacity>=9.0.0",
+    "loguru>=0.7.0",
+    "python-multipart>=0.0.9",
+    "sse-starlette>=2.1.0",
+    "phonenumbers>=8.13.0",
+    "email-validator>=2.2.0",
+    "fastapi-mail==1.6.2",
+    "pyyaml>=6.0.2",
+    "pypdfium2>=4.30.0",
+    "tiktoken>=0.7.0",
+    "slowapi>=0.1.9",
+    "jinja2>=3.1.4",
+    "numpy>=1.26.0",
+    "playwright>=1.40.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "mongomock-motor>=0.0.34",
+    "fakeredis>=2.24.0",
+    "ruff>=0.6.0",
+    "import-linter>=2.0",
+]
+eval = [
+    "deepeval>=1.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = ["eval: DeepEval gates (CI only)"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N"]
+ignore = ["E501"]
+
+[tool.importlinter]
+root_package = "app"
+
+[[tool.importlinter.contracts]]
+name = "Controllers must not import repositories or motor directly"
+type = "forbidden"
+source_modules = ["app.modules.*.controller"]
+forbidden_modules = ["motor", "app.modules.*.repository"]
+
+[[tool.importlinter.contracts]]
+name = "Services must not import FastAPI HTTP types or motor"
+type = "forbidden"
+source_modules = ["app.modules.*.service"]
+forbidden_modules = ["motor", "fastapi"]
+
+[[tool.importlinter.contracts]]
+name = "Repositories must not import services or controllers"
+type = "forbidden"
+source_modules = ["app.modules.*.repository"]
+forbidden_modules = ["app.modules.*.service", "app.modules.*.controller", "fastapi"]

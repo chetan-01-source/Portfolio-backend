@@ -1,0 +1,60 @@
+- name: CHET.ai
+  summary: Personal RAG assistant for the portfolio site. Answers visitor questions
+    grounded in curated sources, runs a Hire-Me lead-capture flow, and emails Chetan's
+    details to the lead on consent.
+  stack: [FastAPI, MongoDB, Qdrant, Redis, OpenRouter, Gmail SMTP, DeepEval]
+  tags: [rag, fastapi, mongodb, llm, vector-search]
+  year: 2026
+  highlights:
+    - Two-tier cache (exact + RediSearch semantic) cuts per-query cost by ~70%
+    - Controller / service / repository layering enforced by import-linter
+    - DeepEval gate in CI blocks regressions on faithfulness/relevancy
+
+- name: Portfolio (chetanmarathe.dev)
+  summary: Personal site built with React + Vite. Includes the chat panel that talks
+    to the CHET.ai backend.
+  stack: [React, Vite, Tailwind]
+  tags: [frontend, portfolio]
+  year: 2026
+  highlights:
+    - SSE consumer for token-streamed chat
+    - Inline Hire-Me flow rendered as conversational bubbles
+
+- name: WhatsApp Clone using CometChat
+  summary: A real-time chat application built to showcase CometChat platform features.
+    Supports 1:1 chats, group conversations, media sharing, and live user presence.
+  stack: [React.js, CometChat UIKit, CometChat SDK, FCM (Firebase Cloud Messaging)]
+  tags: [frontend, real-time, chat, cometchat]
+  year: 2025
+  highlights:
+    - Built 1:1 and group chat with real-time presence, typing indicators, and media sharing
+    - Customized and extended CometChat UIKit with tailored components and advanced SDK features
+    - Integrated AI-powered smart reply suggestions
+    - Implemented FCM-based push notifications for instant message delivery
+    - Created custom workarounds to address UIKit limitations, with detailed documentation
+    - Partnered with Solutions Engineering to customize demos and troubleshoot client integrations
+
+- name: GitTogether
+  summary: A secure platform for developers to share blogs, connect with peers, and
+    chat in real time. Built with PolyRepo microservice architecture.
+  stack: [MongoDB, Express.js, React.js, Node.js, Socket.IO, Redis, Twilio]
+  tags: [fullstack, mern, microservices, real-time]
+  year: 2024
+  highlights:
+    - PolyRepo microservice architecture with separate services for auth, blogs, messaging, and connections
+    - Engineered scalable APIs with cursor-based pagination
+    - Real-time messaging via Socket.IO with delivery/read status and active presence indicators
+    - Redis + Twilio OTP for secure authentication and user activity tracking
+    - Modular React.js frontend with end-to-end development of auth, blogs, connections, and messaging
+    - User profiles, friend lists, and conversation management
+
+- name: Britannia Campaign Engine
+  summary: Built an internal AI-powered campaign engine for brand management, featuring
+    concept generation, competitive analysis, and automated reporting.
+  stack: [React.js, TypeScript, Python, FastAPI, MongoDB, Google Gemini API]
+  tags: [ai, fullstack, enterprise, campaign-management]
+  year: 2025
+  highlights:
+    - AI-powered concept pillar generation using brand DNA and summaries
+    - Competitive analysis and trend tracking for brand campaigns
+    - Internal tool used for brand strategy and marketing operations

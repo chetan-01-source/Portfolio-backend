@@ -1,0 +1,288 @@
+{
+  "info": {
+    "name": "CHET.ai API",
+    "description": "API collection for CHET.ai backend. Set base_url to your backend, for example http://localhost:8000.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "hire_session_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ingest_api_key",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "description": "Checks MongoDB, Redis, Qdrant, and OpenRouter readiness. No query params.",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/health",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "health"
+          ]
+        },
+        "description": "No request body."
+      }
+    },
+    {
+      "name": "Chat Stream",
+      "description": "Streams a RAG answer using server-sent events. No query params. Body requires session_id and message.",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"session_id\": \"demo-session\",\n  \"message\": \"Tell me about Chetan's projects\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/chat",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "chat"
+          ]
+        },
+        "description": "Response is SSE with meta, token, and done events."
+      }
+    },
+    {
+      "name": "Chat - Flush Cache",
+      "description": "Flushes all chat caches (exact + semantic). Use after ingesting new data or to force fresh RAG responses. Header x-ingest-api-key is required only when INGEST_API_KEY is configured.",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "x-ingest-api-key",
+            "value": "{{ingest_api_key}}",
+            "description": "Optional in local/dev unless INGEST_API_KEY is set."
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/chat/cache",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "chat",
+            "cache"
+          ]
+        },
+        "description": "No request body. Returns {ok: true, flushed: {exact: N, semantic: N}} with the count of deleted cache entries."
+      }
+    },
+    {
+      "name": "Hire - Start",
+      "description": "Starts the hire flow. No query params. source can be chat, dock, or terminal:sudo-hire. website is a honeypot and should stay null or empty.",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"source\": \"chat\",\n  \"website\": null\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/hire/start",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "hire",
+            "start"
+          ]
+        },
+        "description": "Returns session_id plus the first question."
+      }
+    },
+    {
+      "name": "Hire - Answer",
+      "description": "Submits one answer for the current hire-flow field. No query params. Use the returned session_id from Hire - Start.",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"session_id\": \"{{hire_session_id}}\",\n  \"answer\": \"Asha Kumar\",\n  \"website\": null\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/hire/answer",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "hire",
+            "answer"
+          ]
+        },
+        "description": "Field order: name, company, contact, email, address, message, send_details. send_details expects yes or no."
+      }
+    },
+    {
+      "name": "Eval Means",
+      "description": "Returns recent eval score means. Query param: limit integer, optional, default 100.",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/eval/means?limit=100",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "eval",
+            "means"
+          ],
+          "query": [
+            {
+              "key": "limit",
+              "value": "100",
+              "description": "Maximum number of recent eval means to return."
+            }
+          ]
+        },
+        "description": "No request body."
+      }
+    },
+    {
+      "name": "Ingest - Resume PDF",
+      "description": "Uploads a resume PDF, extracts text, embeds chunks, and upserts them to Qdrant. Header x-ingest-api-key is required only when INGEST_API_KEY is configured.",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "x-ingest-api-key",
+            "value": "{{ingest_api_key}}",
+            "description": "Optional in local/dev unless INGEST_API_KEY is set."
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": [],
+              "description": "PDF resume file."
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/ingest/resume",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "ingest",
+            "resume"
+          ]
+        },
+        "description": "No query params. Response includes embedded_chunks, points_upserted, sources, and skipped URLs/items."
+      }
+    },
+    {
+      "name": "Ingest - Sources",
+      "description": "Summarizes source/kind counts currently embedded in Qdrant. Header x-ingest-api-key is required only when INGEST_API_KEY is configured.",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-ingest-api-key",
+            "value": "{{ingest_api_key}}",
+            "description": "Optional in local/dev unless INGEST_API_KEY is set."
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/ingest/sources?max_points=1000",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "ingest",
+            "sources"
+          ],
+          "query": [
+            {
+              "key": "max_points",
+              "value": "1000",
+              "description": "Maximum Qdrant points to scan for source summaries."
+            }
+          ]
+        },
+        "description": "No request body. Response groups existing Qdrant points by payload source and kind."
+      }
+    },
+    {
+      "name": "Ingest - URLs",
+      "description": "Crawls portfolio, GitHub, or other URLs, extracts text, embeds chunks, and upserts them to Qdrant.",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-ingest-api-key",
+            "value": "{{ingest_api_key}}",
+            "description": "Optional in local/dev unless INGEST_API_KEY is set."
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"urls\": [\n    \"https://chetanmarathe.dev\",\n    \"https://github.com/chetanmarathe\"\n  ],\n  \"max_pages\": 10,\n  \"max_depth\": 1,\n  \"same_domain_only\": true,\n  \"source_label\": \"api:url\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/ingest/urls",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "ingest",
+            "urls"
+          ]
+        },
+        "description": "No query params. max_pages and max_depth limit crawl scope. GitHub repo/blob URLs are normalized toward raw README/file content where possible."
+      }
+    }
+  ]
+}

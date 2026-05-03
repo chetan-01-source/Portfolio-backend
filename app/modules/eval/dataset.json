@@ -1,0 +1,27 @@
+[
+  {
+    "question": "Who is Chetan Marathe?",
+    "expected_answer": "Chetan is an AI Full Stack Engineer based in Mumbai.",
+    "contexts": []
+  },
+  {
+    "question": "Where does Chetan currently work?",
+    "expected_answer": "Chetan is currently at Schbang.",
+    "contexts": []
+  },
+  {
+    "question": "Where was Chetan before Schbang?",
+    "expected_answer": "He was at CometChat.",
+    "contexts": []
+  },
+  {
+    "question": "What's Chetan's salary?",
+    "expected_answer": "I don't have that on file — best to ask Chetan directly: chetanmarathe0412@gmail.com",
+    "contexts": []
+  },
+  {
+    "question": "How can I hire Chetan?",
+    "expected_answer": "Use the Hire Me flow on this site, or email chetanmarathe0412@gmail.com directly.",
+    "contexts": []
+  }
+]

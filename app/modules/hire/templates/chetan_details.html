@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #111;">
+  <h2 style="margin-top:0;">Hi {{ name }},</h2>
+  <p>Thanks for reaching out — here's what you asked for.</p>
+
+  <table style="border-collapse: collapse; margin: 16px 0; width:100%;">
+    <tr><td style="padding:6px 0; color:#666; width:120px;">Resume</td>
+        <td><a href="{{ resume_url }}">{{ resume_url }}</a></td></tr>
+    <tr><td style="padding:6px 0; color:#666;">Portfolio</td>
+        <td><a href="{{ portfolio_url }}">{{ portfolio_url }}</a></td></tr>
+    <tr><td style="padding:6px 0; color:#666;">Email</td>
+        <td><a href="mailto:{{ email }}">{{ email }}</a></td></tr>
+    {% if phone %}
+    <tr><td style="padding:6px 0; color:#666;">Phone</td>
+        <td>{{ phone }}</td></tr>
+    {% endif %}
+    <tr><td style="padding:6px 0; color:#666;">LinkedIn</td>
+        <td><a href="{{ linkedin_url }}">{{ linkedin_url }}</a></td></tr>
+    <tr><td style="padding:6px 0; color:#666;">GitHub</td>
+        <td><a href="{{ github_url }}">{{ github_url }}</a></td></tr>
+    <tr><td style="padding:6px 0; color:#666;">LeetCode</td>
+        <td><a href="{{ leetcode_url }}">{{ leetcode_url }}</a></td></tr>
+  </table>
+
+  <p>Chetan will follow up directly{% if company %} about the opportunity at <b>{{ company }}</b>{% endif %}.</p>
+
+  <hr style="border:none; border-top:1px solid #eee; margin:24px 0;">
+  <p style="color:#888; font-size:12px;">
+    You're receiving this because you requested Chetan's details on
+    <a href="{{ portfolio_url }}" style="color:#888;">{{ portfolio_url }}</a>.
+  </p>
+</body>
+</html>
