@@ -73,3 +73,15 @@
 
 - `.env` — `CORS_ORIGINS` had port `5174` but frontend runs on `5173`. Changed to `*` to allow all origins.
 - `app/main.py` — When `CORS_ORIGINS=*`, automatically disables `allow_credentials` (Starlette rejects wildcard + credentials combo).
+
+## 2026-05-04: Two-stage semantic cache — vector similarity + keyword overlap
+
+**Problem:** "Tell me about CSAT project" and "experience with Schbang" returned the same cached response. Vector-only similarity (0.93 threshold) can't distinguish topically-adjacent queries about the same person/company.
+
+**Solution — Two-stage verification in `app/cache/semantic.py`:**
+- **Stage 1 (vector):** Cosine similarity ≥ 0.93 (unchanged, keeps caching aggressive for cost savings).
+- **Stage 2 (keyword):** Extract meaningful keywords from both new and cached queries (minus stopwords), compute Jaccard overlap. Reject if overlap < 0.40.
+- Example: "CSAT project" keywords = `{csat, project}`, cached "Schbang experience" keywords = `{schbang, experience}` → Jaccard = 0/4 = 0.0 → cache MISS despite vector match.
+- Added detailed logging: `sem-cache HIT/MISS (keyword)` for debugging.
+- `app/modules/chat/service.py` — Passes `query_text` to `semantic.lookup()` for Stage 2 verification.
+- Threshold reverted to `0.93` — keyword overlap layer handles false positives.

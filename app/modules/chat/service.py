@@ -190,8 +190,8 @@ class ChatService:
             yield StreamChunk("error", {"message": "embedding failed"})
             return
 
-        # 3. Semantic cache.
-        sem = await self.semantic.lookup(qvec)
+        # 3. Semantic cache (two-stage: vector similarity + keyword overlap).
+        sem = await self.semantic.lookup(qvec, query_text=cache_query)
         if sem is not None:
             yield StreamChunk(
                 "meta",
