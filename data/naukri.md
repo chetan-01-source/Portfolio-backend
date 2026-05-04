@@ -7,7 +7,8 @@ AI Full Stack Engineer
 Mumbai (open to remote)
 
 ## Years of experience
-~5 years across full-stack engineering and applied AI.
+About 1 year of professional experience across full-stack engineering and applied AI.
+Current Schbang tenure starts in Dec 2025.
 
 ## Notable areas
 - RAG systems and LLM-powered product features

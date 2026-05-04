@@ -13,6 +13,8 @@ class ChatStreamMeta(BaseModel):
     cache: Literal["exact", "semantic"] | None = None
     retrieved_ids: list[str] = Field(default_factory=list)
     model: str | None = None
+    intent: Literal["hire"] | None = None
+    memory: bool = False
 
 
 class ChatStreamDone(BaseModel):

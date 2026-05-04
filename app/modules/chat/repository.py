@@ -1,6 +1,7 @@
 """All Mongo I/O for chat_logs."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -8,6 +9,18 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 class ChatRepository:
     def __init__(self, db: AsyncIOMotorDatabase) -> None:
         self.logs = db.chat_logs
+
+    async def recent_logs(self, *, session_id: str, limit: int = 8) -> list[dict[str, Any]]:
+        cursor = (
+            self.logs.find(
+                {"session_id": session_id},
+                {"_id": 0, "role": 1, "content": 1, "created_at": 1},
+            )
+            .sort("created_at", -1)
+            .limit(limit)
+        )
+        logs = await cursor.to_list(length=limit)
+        return list(reversed(logs))
 
     async def insert_log(
         self,
@@ -33,6 +46,6 @@ class ChatRepository:
                 "tokens_out": tokens_out,
                 "latency_ms": latency_ms,
                 "cache": cache,
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
             }
         )

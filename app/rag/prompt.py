@@ -20,9 +20,16 @@ def format_chunks(docs: list[dict]) -> str:
     return "\n\n".join(parts)
 
 
-def build_messages(query: str, docs: list[dict]) -> list[dict[str, str]]:
+def build_messages(
+    query: str, docs: list[dict], *, conversation_summary: str = ""
+) -> list[dict[str, str]]:
     chunks = format_chunks(docs)
-    system = _SYSTEM.replace("{retrieved_chunks}", chunks).replace("{query}", query)
+    chat_summary = conversation_summary.strip() or "No prior conversation in this session."
+    system = (
+        _SYSTEM.replace("{retrieved_chunks}", chunks)
+        .replace("{chat_summary}", chat_summary)
+        .replace("{query}", query)
+    )
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": query},

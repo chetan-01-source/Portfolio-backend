@@ -1,8 +1,8 @@
 """Semantic cache using RediSearch vector index (HNSW + cosine).
 
 Layout:
-- Index: idx:chat:sem
-- Documents: hash entries `chat:sem:{uuid}` with fields:
+- Index: idx:chat:sem:v2
+- Documents: hash entries `chat:sem:v2:{uuid}` with fields:
     embedding (FLOAT32 vector, dim=N)
     query (text)
     answer (text)
@@ -26,8 +26,8 @@ from redis.commands.search.query import Query
 from app.config import Settings
 from app.core.logging import logger
 
-INDEX_NAME = "idx:chat:sem"
-KEY_PREFIX = "chat:sem:"
+INDEX_NAME = "idx:chat:sem:v2"
+KEY_PREFIX = "chat:sem:v2:"
 
 
 def _to_bytes(vec: list[float]) -> bytes:
@@ -107,7 +107,7 @@ class SemanticCache:
     async def flush_all(self) -> int:
         """Delete all semantic-cache entries. Returns count deleted."""
         keys: list[bytes] = []
-        async for key in self.redis.scan_iter(f"{KEY_PREFIX}*"):
+        async for key in self.redis.scan_iter("chat:sem:*"):
             keys.append(key)
         if keys:
             await self.redis.delete(*keys)

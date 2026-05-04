@@ -1,6 +1,6 @@
 """Exact-match query cache.
 
-Key: chat:exact:sha256(normalized_query|model)
+Key: chat:exact:v2:sha256(normalized_query|model)
 Value: JSON {answer, doc_ids, model, ts}
 """
 
@@ -15,6 +15,7 @@ from redis.asyncio import Redis
 from app.config import Settings
 
 _WS = re.compile(r"\s+")
+KEY_PREFIX = "chat:exact:v2:"
 
 
 def normalize(q: str) -> str:
@@ -23,7 +24,7 @@ def normalize(q: str) -> str:
 
 def cache_key(query: str, model: str) -> str:
     h = hashlib.sha256(f"{normalize(query)}|{model}".encode()).hexdigest()
-    return f"chat:exact:{h}"
+    return f"{KEY_PREFIX}{h}"
 
 
 class ExactCache:
