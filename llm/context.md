@@ -74,14 +74,37 @@
 - `.env` — `CORS_ORIGINS` had port `5174` but frontend runs on `5173`. Changed to `*` to allow all origins.
 - `app/main.py` — When `CORS_ORIGINS=*`, automatically disables `allow_credentials` (Starlette rejects wildcard + credentials combo).
 
-## 2026-05-04: Two-stage semantic cache — vector similarity + keyword overlap
+## 2026-05-04: Three-stage semantic cache + query separation (major cache fix)
 
-**Problem:** "Tell me about CSAT project" and "experience with Schbang" returned the same cached response. Vector-only similarity (0.93 threshold) can't distinguish topically-adjacent queries about the same person/company.
+**Problem:** Cached responses leaked across different projects/companies. "CSAT project details" returned a cached "CometChat experience" answer. Two root causes:
+1. The cache stored the _contextual query_ (which includes full conversation history), so two different questions with the same chat history looked identical to the cache.
+2. Vector-only similarity (0.93 threshold) can't distinguish topically-adjacent queries about the same person.
 
-**Solution — Two-stage verification in `app/cache/semantic.py`:**
-- **Stage 1 (vector):** Cosine similarity ≥ 0.93 (unchanged, keeps caching aggressive for cost savings).
-- **Stage 2 (keyword):** Extract meaningful keywords from both new and cached queries (minus stopwords), compute Jaccard overlap. Reject if overlap < 0.40.
-- Example: "CSAT project" keywords = `{csat, project}`, cached "Schbang experience" keywords = `{schbang, experience}` → Jaccard = 0/4 = 0.0 → cache MISS despite vector match.
-- Added detailed logging: `sem-cache HIT/MISS (keyword)` for debugging.
-- `app/modules/chat/service.py` — Passes `query_text` to `semantic.lookup()` for Stage 2 verification.
-- Threshold reverted to `0.93` — keyword overlap layer handles false positives.
+**Solution — Three architectural changes:**
+
+### 1. Query Separation (`app/modules/chat/service.py`)
+- `user_query = message` — raw user input, used for **cache lookup/store only**. Never includes conversation history.
+- `retrieval_query = _contextual_query(message, conversation_summary)` — enriched with history, used for **embedding, retrieval, and LLM context**.
+- This prevents the cache from storing/comparing queries that contain previous assistant answers.
+
+### 2. Memory-Aware Caching (`app/modules/chat/service.py`)
+- **Follow-up questions** (when `conversation_summary` exists) **skip semantic cache entirely** — both lookup and storage.
+- Follow-up answers depend on conversation state and would be misleading if served to a different session.
+- Exact cache also skips storage for follow-ups.
+- Standalone queries (no memory) use full cache pipeline normally.
+
+### 3. Three-Stage Semantic Cache (`app/cache/semantic.py`)
+- **Stage 1 (vector):** Cosine similarity ≥ 0.93 (unchanged).
+- **Stage 2 (entity conflict gate):** Known entities registry (companies: schbang, cometchat; projects: csat, gittogether, britannia, etc.; tech domains: voice, webflow). If new query and cached query reference **different entities in the same category** (e.g., two different companies), force MISS regardless of similarity.
+- **Stage 3 (keyword overlap):** Jaccard similarity of keyword sets ≥ 0.40 (unchanged from previous).
+- Added `should_accept_cache_hit()` — testable function encapsulating all 3 stages.
+- Cache `store()` now persists detected entities alongside each entry.
+- Expanded stopwords with generic HR/professional filler: `role`, `responsibilities`, `overview`, `info`, `working`, `experience`, `current`, `job`, `position`.
+
+**Files Changed:**
+- `app/cache/semantic.py` — Three-stage cache with entity registry, conflict detection, `should_accept_cache_hit()`.
+- `app/modules/chat/service.py` — Query separation (`user_query` vs `retrieval_query`), memory-aware cache bypass.
+- `tests/test_semantic_cache.py` — 68 tests: keyword extraction, entity detection, entity conflict, Jaccard, `should_accept_cache_hit()`, 15-pair MISS matrix, 6-pair HIT matrix, edge cases, 4 regression tests.
+- `tests/modules/chat/test_service_memory.py` — 7 tests: follow-up skips cache, standalone uses cache, cache never stores history, exact cache uses raw message, regression test.
+
+**Result:** 79/79 tests pass. RediSearch index dropped and recreated with `entities` field. All cache entries flushed.

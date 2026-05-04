@@ -144,13 +144,25 @@ class ChatService:
             conversation_summary = _build_conversation_summary(history)
         except Exception as e:
             logger.warning(f"chat history lookup failed: {e}")
-        cache_query = _contextual_query(message, conversation_summary)
+
+        # ── Query separation ──────────────────────────────────────────
+        # user_query:      raw message — used for cache lookup/store.
+        #                  NEVER includes conversation history.
+        # retrieval_query: enriched with history — used for embedding,
+        #                  retrieval, and LLM context.
+        # This prevents the cache from storing/comparing queries that
+        # contain previous assistant answers, which was causing cross-
+        # contamination (e.g. Schbang overview cached → CSAT question
+        # returned the Schbang answer because the history blob matched).
+        user_query = message
+        retrieval_query = _contextual_query(message, conversation_summary)
+        has_memory = bool(conversation_summary)
 
         # Log user turn first.
         await self.repo.insert_log(session_id=session_id, role="user", content=message)
 
-        # 1. Exact cache.
-        hit = await self.exact.get(cache_query, model)
+        # 1. Exact cache (uses raw user_query, not the contextual blob).
+        hit = await self.exact.get(user_query, model)
         if hit is not None:
             yield StreamChunk(
                 "meta",
@@ -159,7 +171,7 @@ class ChatService:
                     "retrieved_ids": hit.get("doc_ids", []),
                     "model": model,
                     "intent": intent,
-                    "memory": bool(conversation_summary),
+                    "memory": has_memory,
                 },
             )
             yield StreamChunk("token", {"delta": hit["answer"]})
@@ -182,49 +194,59 @@ class ChatService:
             )
             return
 
-        # 2. Embed query (used by semantic cache + retrieval).
+        # 2. Embed the retrieval query (enriched with history for better retrieval).
         try:
-            qvec = await self.embedder.embed_one(cache_query)
+            retrieval_vec = await self.embedder.embed_one(retrieval_query)
         except Exception as e:
             logger.error(f"embed failed: {e}")
             yield StreamChunk("error", {"message": "embedding failed"})
             return
 
-        # 3. Semantic cache (two-stage: vector similarity + keyword overlap).
-        sem = await self.semantic.lookup(qvec, query_text=cache_query)
-        if sem is not None:
-            yield StreamChunk(
-                "meta",
-                {
-                    "cache": "semantic",
-                    "retrieved_ids": sem.get("doc_ids", []),
-                    "model": model,
-                    "intent": intent,
-                    "memory": bool(conversation_summary),
-                },
-            )
-            yield StreamChunk("token", {"delta": sem["answer"]})
-            yield StreamChunk(
-                "done",
-                {
-                    "latency_ms": int((time.perf_counter() - started) * 1000),
-                    "tokens_in": 0,
-                    "tokens_out": 0,
-                },
-            )
-            await self.repo.insert_log(
-                session_id=session_id,
-                role="assistant",
-                content=sem["answer"],
-                retrieved_ids=sem.get("doc_ids", []),
-                model=model,
-                cache="semantic",
-                latency_ms=int((time.perf_counter() - started) * 1000),
-            )
-            return
+        # 3. Semantic cache — SKIP for follow-up questions with memory.
+        #    Follow-ups like "what about that project?" are too contextual
+        #    for a standalone cache entry to be meaningful.
+        if not has_memory:
+            # For standalone queries, also embed the raw user_query
+            # (without history) for a clean cache comparison.
+            try:
+                user_vec = await self.embedder.embed_one(user_query)
+            except Exception:
+                user_vec = retrieval_vec  # fallback
 
-        # 4. Retrieve.
-        docs = await self.retriever.search(query_vec=qvec, query_text=cache_query)
+            sem = await self.semantic.lookup(user_vec, query_text=user_query)
+            if sem is not None:
+                yield StreamChunk(
+                    "meta",
+                    {
+                        "cache": "semantic",
+                        "retrieved_ids": sem.get("doc_ids", []),
+                        "model": model,
+                        "intent": intent,
+                        "memory": False,
+                    },
+                )
+                yield StreamChunk("token", {"delta": sem["answer"]})
+                yield StreamChunk(
+                    "done",
+                    {
+                        "latency_ms": int((time.perf_counter() - started) * 1000),
+                        "tokens_in": 0,
+                        "tokens_out": 0,
+                    },
+                )
+                await self.repo.insert_log(
+                    session_id=session_id,
+                    role="assistant",
+                    content=sem["answer"],
+                    retrieved_ids=sem.get("doc_ids", []),
+                    model=model,
+                    cache="semantic",
+                    latency_ms=int((time.perf_counter() - started) * 1000),
+                )
+                return
+
+        # 4. Retrieve (uses the full retrieval_query with context for better results).
+        docs = await self.retriever.search(query_vec=retrieval_vec, query_text=retrieval_query)
         doc_ids = [d["id"] for d in docs]
 
         yield StreamChunk(
@@ -234,7 +256,7 @@ class ChatService:
                 "retrieved_ids": doc_ids,
                 "model": model,
                 "intent": intent,
-                "memory": bool(conversation_summary),
+                "memory": has_memory,
             },
         )
 
@@ -267,13 +289,20 @@ class ChatService:
             latency_ms=latency_ms,
         )
 
-        # 6. Cache writes.
-        if answer:
+        # 6. Cache writes — only cache standalone queries (no memory context).
+        #    Follow-up answers depend on conversation state and would be
+        #    misleading if served to a different session.
+        if answer and not has_memory:
             try:
-                await self.exact.set(cache_query, model, answer=answer, doc_ids=doc_ids)
+                await self.exact.set(user_query, model, answer=answer, doc_ids=doc_ids)
+                # Embed the clean user_query for cache storage
+                try:
+                    user_vec = await self.embedder.embed_one(user_query)
+                except Exception:
+                    user_vec = retrieval_vec
                 await self.semantic.store(
-                    embedding=qvec,
-                    query=cache_query,
+                    embedding=user_vec,
+                    query=user_query,
                     answer=answer,
                     doc_ids=doc_ids,
                     model=model,
