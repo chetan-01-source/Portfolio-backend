@@ -6,7 +6,7 @@ layering, hire-flow that emails Chetan's details to the lead.
 
 ## Stack
 
-FastAPI · MongoDB (Motor) · Redis 7 (RediSearch) · Qdrant · OpenRouter · fastapi-mail · DeepEval
+FastAPI · MongoDB (Motor) · Redis 7 (RediSearch) · Qdrant · OpenRouter · SendGrid · DeepEval
 
 ## Layout
 
@@ -20,7 +20,7 @@ under `app/rag/`. See [plan.md §11](plan.md) for the layer-import rules.
 
 ```bash
 cp .env.example .env
-# Add OPENROUTER_API_KEY. For real emails, add Gmail SMTP app-password settings.
+# Add OPENROUTER_API_KEY. For real emails, add SENDGRID_API_KEY and a verified sender.
 
 docker compose up -d
 docker compose exec api python -m app.rag.ingest
@@ -72,21 +72,19 @@ explicitly asks to send/share the resume, portfolio, or details, that message
 is treated as consent and the details email is sent immediately. See
 [plan.md §8](plan.md#8-hire-me-flow).
 
-## Gmail SMTP With fastapi-mail
+## SendGrid Web API
 
-Email delivery runs inside FastAPI with `fastapi-mail` and Gmail SMTP over
-STARTTLS. There is no separate mail sidecar.
+Email delivery runs inside FastAPI with SendGrid's Web API. There is no
+separate mail sidecar.
 
-To configure real Gmail delivery:
+To configure real SendGrid delivery:
 
-1. Enable 2-step verification on the Gmail account.
-2. Create an app password in Google Account security settings.
-3. Set `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, `MAIL_PORT=587`,
-   `MAIL_SERVER=smtp.gmail.com`, `MAIL_FROM_NAME`, `MAIL_STARTTLS=true`,
-   `MAIL_SSL_TLS=false`, `USE_CREDENTIALS=true`, and `VALIDATE_CERTS=true`
-   in `.env`.
-4. Use the generated Gmail app password for `MAIL_PASSWORD`; do not use the
-   normal Gmail login password.
+1. Create a SendGrid API key with Mail Send access.
+2. Verify the sender used in `SENDGRID_FROM_EMAIL`.
+3. Set `SENDGRID_API_KEY`, `SENDGRID_TEMPLATE_ID`,
+   `SENDGRID_FROM_EMAIL`, and `SENDGRID_FROM_NAME` in `.env`.
+4. Leave `SENDGRID_DATA_RESIDENCY` empty unless you are sending with an
+   EU-pinned SendGrid subuser, then set it to `eu`.
 
 ## Tests
 
@@ -103,6 +101,7 @@ Mongo and a stubbed `EmailClient` — no live infra required.
 - `LLM_CHEAP_MODEL` / `LLM_STRONG_MODEL` — OpenRouter routing tiers (plan §9)
 - `SEMANTIC_CACHE_THRESHOLD=0.93` — KNN cosine similarity floor for semantic cache
 - `RERANKER_URL` — set to a BGE sidecar's URL to enable cross-encoder rerank; empty disables
+- `SENDGRID_TEMPLATE_ID=d-8ef38ee86ac8492aaba9413a8e8be01b` — dynamic template used for the lead-facing details email
 - `INCLUDE_PHONE_IN_EMAIL=false` — whether the lead-facing email shows Chetan's phone
 - `CHETAN_RESUME_ATTACHMENT_PATH=data/resume.pdf` — local resume PDF attached to the lead-facing details email; leave empty to send links only
 - `NOTIFY_CHETAN_ON_LEAD=true` — sends a separate internal notification on every capture

@@ -18,12 +18,11 @@ dependencies = [
     "sse-starlette>=2.1.0",
     "phonenumbers>=8.13.0",
     "email-validator>=2.2.0",
-    "fastapi-mail==1.6.2",
+    "sendgrid>=6.11.0",
     "pyyaml>=6.0.2",
     "pypdfium2>=4.30.0",
     "tiktoken>=0.7.0",
     "slowapi>=0.1.9",
-    "jinja2>=3.1.4",
     "numpy>=1.26.0",
     "playwright>=1.40.0",
 ]

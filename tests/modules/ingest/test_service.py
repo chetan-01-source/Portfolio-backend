@@ -23,6 +23,15 @@ class _FakeQdrant:
         return self.scroll_records, None
 
 
+class _FakeRedis:
+    async def scan_iter(self, match=None):
+        if False:
+            yield match
+
+    async def delete(self, *keys):
+        return len(keys)
+
+
 class _FakeOpenRouterClient:
     def __init__(self, settings) -> None:
         self.settings = settings
@@ -45,7 +54,11 @@ async def test_embed_and_upsert_chunks(monkeypatch, source):
     monkeypatch.setattr("app.modules.ingest.service.OpenRouterClient", _FakeOpenRouterClient)
     monkeypatch.setattr("app.modules.ingest.service.Embedder", _FakeEmbedder)
     qdrant = _FakeQdrant()
-    service = IngestService(qdrant=qdrant, settings=Settings(qdrant_collection="test_collection"))
+    service = IngestService(
+        qdrant=qdrant,
+        redis=_FakeRedis(),
+        settings=Settings(qdrant_collection="test_collection"),
+    )
 
     result = await service._embed_and_upsert(
         [Chunk(text="hello world", metadata={"source": source, "kind": "test"})],
@@ -68,7 +81,11 @@ async def test_list_sources_summarizes_qdrant_payloads():
         SimpleNamespace(payload={"source": "resume.pdf", "kind": "resume"}),
         SimpleNamespace(payload={"source": "https://example.com", "kind": "url"}),
     ]
-    service = IngestService(qdrant=qdrant, settings=Settings(qdrant_collection="test_collection"))
+    service = IngestService(
+        qdrant=qdrant,
+        redis=_FakeRedis(),
+        settings=Settings(qdrant_collection="test_collection"),
+    )
 
     result = await service.list_sources(max_points=100)
 

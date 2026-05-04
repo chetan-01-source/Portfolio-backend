@@ -15,7 +15,7 @@ HTTP request
   -> FastAPI controller
   -> service
   -> repository or infrastructure client
-  -> MongoDB / Redis / Qdrant / OpenRouter / Gmail SMTP
+  -> MongoDB / Redis / Qdrant / OpenRouter / SendGrid
   -> response
 ```
 
@@ -26,7 +26,7 @@ Layer responsibilities:
 | Controller | Defines route, validates request body with Pydantic, reads dependencies, maps domain errors to HTTP errors. |
 | Service | Owns business flow, state transitions, cache/retrieval orchestration, and email decisions. |
 | Repository | Owns MongoDB reads/writes only. |
-| Infrastructure clients | Wrap Redis, Qdrant, OpenRouter, SMTP, logging, and request metadata. |
+| Infrastructure clients | Wrap Redis, Qdrant, OpenRouter, SendGrid, logging, and request metadata. |
 
 The backend adds request tracking middleware, so controllers can read client IP, user-agent, and request id from `request.state`.
 
@@ -315,8 +315,8 @@ Under the hood:
 12. The API asks `send_details` and includes the created `lead_id`.
 13. If user answers `no`, consent is saved and flow ends with `emailed=false`.
 14. If user answers `yes`, the service loads the lead and calls `EmailClient.send_chetan_details()`.
-15. If SMTP succeeds, `mark_emailed()` sets `emailed=true`, `email_msgid`, and `emailed_at`.
-16. If SMTP fails, the exception is logged; the lead remains saved and final response has `emailed=false`.
+15. If SendGrid accepts the send, `mark_emailed()` sets `emailed=true`, `email_msgid`, and `emailed_at`.
+16. If SendGrid rejects the send, the exception is logged; the lead remains saved and final response has `emailed=false`.
 
 Why the lead is saved before consent:
 
@@ -324,23 +324,18 @@ Why the lead is saved before consent:
 - Email delivery is not allowed to control lead persistence.
 - The consent answer only controls whether Chetan’s details are emailed to the lead.
 
-## Email Implementation With fastapi-mail
+## Email Implementation With SendGrid
 
 Email runs inside FastAPI in `app/modules/hire/email_client.py`.
 
 Config:
 
 ```env
-MAIL_USERNAME=your-gmail-address@gmail.com
-MAIL_PASSWORD=your-gmail-app-password
-MAIL_FROM=your-gmail-address@gmail.com
-MAIL_PORT=587
-MAIL_SERVER=smtp.gmail.com
-MAIL_FROM_NAME=CHET.ai
-MAIL_STARTTLS=true
-MAIL_SSL_TLS=false
-USE_CREDENTIALS=true
-VALIDATE_CERTS=true
+SENDGRID_API_KEY=SG.xxxxx
+SENDGRID_TEMPLATE_ID=d-8ef38ee86ac8492aaba9413a8e8be01b
+SENDGRID_FROM_EMAIL=verified-sender@example.com
+SENDGRID_FROM_NAME=CHET.ai
+SENDGRID_DATA_RESIDENCY=
 CHETAN_RESUME_ATTACHMENT_PATH=data/resume.pdf
 ```
 
@@ -348,40 +343,35 @@ Where environment values come from:
 
 | Variable | Value |
 |---|---|
-| `MAIL_USERNAME` | Your Gmail address. |
-| `MAIL_PASSWORD` | Gmail app password generated after enabling 2-step verification. |
-| `MAIL_FROM` | Usually the same Gmail address as `MAIL_USERNAME`. |
-| `MAIL_PORT` | `587` for Gmail STARTTLS. |
-| `MAIL_SERVER` | `smtp.gmail.com`. |
-| `MAIL_FROM_NAME` | Display name, for example `CHET.ai`. |
-| `MAIL_STARTTLS` | `true` for port `587`. |
-| `MAIL_SSL_TLS` | `false` for port `587`; use SSL/TLS only for port `465`. |
-| `USE_CREDENTIALS` | `true` for Gmail login. |
-| `VALIDATE_CERTS` | `true` to validate TLS certificates. |
+| `SENDGRID_API_KEY` | SendGrid API key with Mail Send access. |
+| `SENDGRID_TEMPLATE_ID` | Dynamic template id for the lead-facing details email. |
+| `SENDGRID_FROM_EMAIL` | Verified sender identity in SendGrid. |
+| `SENDGRID_FROM_NAME` | Display name, for example `CHET.ai`. |
+| `SENDGRID_DATA_RESIDENCY` | Set to `eu` only for EU-pinned SendGrid subusers; otherwise leave empty. |
 | `CHETAN_RESUME_ATTACHMENT_PATH` | Local PDF path attached to the lead-facing details email; leave empty to send links only. |
 
 How sending works:
 
-1. FastAPI renders `chetan_details.html` and `chetan_details.txt` with Jinja.
-2. `EmailClient` builds a `fastapi-mail.ConnectionConfig` from `MAIL_*` settings.
-3. `MessageSchema` creates the email payload.
-4. Lead-facing details email uses `MessageType.html` with a plain-text `alternative_body` and attaches the local resume PDF when configured.
-5. Internal notification email uses `MessageType.plain`.
-6. `FastMail.send_message()` sends through Gmail SMTP.
+1. `EmailClient` creates a SendGrid `Mail` payload.
+2. Lead-facing details email uses the configured dynamic template id.
+3. Dynamic template data includes both `leadName` and `name` for the greeting.
+4. The local resume PDF is attached as base64 when configured and present.
+5. Internal notification email uses plain text.
+6. `SendGridAPIClient.send()` sends through the Web API.
 7. A generated tracking ID is added as `X-CHET-Message-ID`, returned, and stored on the lead after success.
 
-Missing SMTP config behavior:
+Missing SendGrid config behavior:
 
 - `send_chetan_details()` returns `stub-no-mail-config`.
 - This lets local/dev flows finish without real email credentials.
-- Notification email is skipped when mail config is missing.
+- Notification email is skipped when SendGrid config is missing.
 
-Gmail setup:
+SendGrid setup:
 
-1. Enable 2-step verification on the Gmail account.
-2. Create a Gmail app password.
-3. Use the app password for `MAIL_PASSWORD`.
-4. Do not use the normal Gmail login password.
+1. Create a SendGrid API key with Mail Send access.
+2. Verify `SENDGRID_FROM_EMAIL` as a sender identity.
+3. Confirm template `d-8ef38ee86ac8492aaba9413a8e8be01b` has an active version.
+4. Use `{{leadName}}` or `{{name}}` in the SendGrid template greeting.
 
 ## `GET /api/eval/means`
 
@@ -448,7 +438,7 @@ OpenRouter:
 - Embeddings for user queries.
 - Streaming chat generation.
 
-Gmail SMTP:
+SendGrid Web API:
 
 - Sends lead-facing details email.
 - Sends internal notification email to Chetan when enabled.
@@ -458,7 +448,7 @@ Gmail SMTP:
 - OpenAPI docs are available at `/docs`.
 - Importable Postman collection is in `docs/postman/CHET-ai.postman_collection.json`.
 - The detailed request/response collection is in `docs/api-collection.md`.
-- Unit tests avoid live infrastructure by mocking Mongo or SMTP where needed.
+- Unit tests avoid live infrastructure by mocking Mongo or SendGrid where needed.
 - Run tests with:
 
 ```bash

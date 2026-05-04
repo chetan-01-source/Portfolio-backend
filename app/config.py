@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     use_credentials: bool = True
     validate_certs: bool = True
 
+    sendgrid_api_key: str = ""
+    sendgrid_template_id: str = "d-8ef38ee86ac8492aaba9413a8e8be01b"
+    sendgrid_from_email: str = ""
+    sendgrid_from_name: str = "CHET.ai"
+    sendgrid_data_residency: str = ""
+
     chetan_email: str = "chetanmarathe0412@gmail.com"
     chetan_phone: str = ""
     include_phone_in_email: bool = False

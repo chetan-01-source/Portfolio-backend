@@ -1,71 +1,78 @@
-"""fastapi-mail email client. Composes and sends two email types:
+"""SendGrid Web API email client for the hire flow.
 
-1. `send_chetan_details(...)` — to the lead, with Chetan's resume/portfolio/contact.
-2. `notify_chetan_new_lead(...)` — to Chetan, internal notification.
+Sends two email types:
+
+1. `send_chetan_details(...)` — to the lead, using Chetan's SendGrid dynamic template.
+2. `notify_chetan_new_lead(...)` — to Chetan, as a plain-text internal notification.
 
 Returns the generated tracking ID on success, raises on delivery failure.
 """
 
+import asyncio
+import base64
+import mimetypes
 from email.utils import make_msgid
 from pathlib import Path
 
-from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
-from fastapi_mail.schemas import MultipartSubtypeEnum
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import (
+    Attachment,
+    Disposition,
+    Email,
+    FileContent,
+    FileName,
+    FileType,
+    Header,
+    Mail,
+    ReplyTo,
+    To,
+)
 
 from app.config import Settings
 from app.core.logging import logger
 from app.modules.hire.schemas import Lead
 
-_TEMPLATES_DIR = Path(__file__).parent / "templates"
 _TRACKING_HEADER = "X-CHET-Message-ID"
-
-_jinja = Environment(
-    loader=FileSystemLoader(_TEMPLATES_DIR),
-    autoescape=select_autoescape(["html"]),
-    trim_blocks=True,
-    lstrip_blocks=True,
-)
+_ACCEPTED_STATUS_CODES = {200, 201, 202}
 
 
 class EmailClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def _is_configured(self) -> bool:
-        s = self.settings
-        return bool(
-            s.mail_username
-            and s.mail_password
-            and s.mail_from
-            and s.mail_port
-            and s.mail_server
+    def _from_email(self) -> str:
+        return (
+            self.settings.sendgrid_from_email.strip()
+            or self.settings.mail_from.strip()
+            or self.settings.chetan_email.strip()
         )
+
+    def _is_configured(self, *, require_template: bool = False) -> bool:
+        configured = bool(self.settings.sendgrid_api_key and self._from_email())
+        if require_template:
+            configured = configured and bool(self.settings.sendgrid_template_id)
+        return configured
 
     def _message_id(self) -> str:
-        s = self.settings
-        domain = s.mail_from.rsplit("@", 1)[-1] if "@" in s.mail_from else "localhost"
+        from_email = self._from_email()
+        domain = from_email.rsplit("@", 1)[-1] if "@" in from_email else "localhost"
         return make_msgid(domain=domain)
 
-    def _connection_config(self) -> ConnectionConfig:
-        s = self.settings
-        return ConnectionConfig(
-            MAIL_USERNAME=s.mail_username,
-            MAIL_PASSWORD=s.mail_password,
-            MAIL_FROM=s.mail_from,
-            MAIL_PORT=s.mail_port,
-            MAIL_SERVER=s.mail_server,
-            MAIL_FROM_NAME=s.mail_from_name,
-            MAIL_STARTTLS=s.mail_starttls,
-            MAIL_SSL_TLS=s.mail_ssl_tls,
-            USE_CREDENTIALS=s.use_credentials,
-            VALIDATE_CERTS=s.validate_certs,
-        )
+    def _client(self) -> SendGridAPIClient:
+        sg = SendGridAPIClient(self.settings.sendgrid_api_key)
+        data_residency = self.settings.sendgrid_data_residency.strip().lower()
+        if data_residency:
+            sg.set_sendgrid_data_residency(data_residency)
+        return sg
 
-    def _resume_attachments(self) -> list[str]:
+    def _sender(self) -> Email:
+        name = self.settings.sendgrid_from_name.strip() or self.settings.mail_from_name
+        return Email(self._from_email(), name)
+
+    def _resume_attachment(self) -> Attachment | None:
         raw_path = self.settings.chetan_resume_attachment_path.strip()
         if not raw_path:
-            return []
+            return None
 
         path = Path(raw_path).expanduser()
         if not path.is_absolute():
@@ -75,75 +82,91 @@ class EmailClient:
             logger.warning(
                 f"Resume attachment not found at {path}; sending details email with links only"
             )
-            return []
+            return None
 
-        return [str(path)]
+        mime_type, _ = mimetypes.guess_type(path.name)
+        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+        return Attachment(
+            FileContent(encoded),
+            FileName(path.name),
+            FileType(mime_type or "application/pdf"),
+            Disposition("attachment"),
+        )
 
-    async def _send_message(self, message: MessageSchema, message_id: str) -> str:
-        if not self._is_configured():
-            logger.warning("Mail config missing — skipping send")
+    async def _send_message(
+        self,
+        message: Mail,
+        message_id: str,
+        *,
+        require_template: bool = False,
+    ) -> str:
+        if not self._is_configured(require_template=require_template):
+            logger.warning("SendGrid config missing — skipping send")
             return "stub-no-mail-config"
 
-        fm = FastMail(self._connection_config())
-        await fm.send_message(message)
+        sg = self._client()
+        response = await asyncio.to_thread(sg.send, message)
+        status_code = int(getattr(response, "status_code", 0) or 0)
+        if status_code not in _ACCEPTED_STATUS_CODES:
+            body = getattr(response, "body", b"")
+            if isinstance(body, bytes):
+                body = body.decode("utf-8", errors="replace")
+            raise RuntimeError(f"SendGrid send failed with status {status_code}: {body}")
         return message_id
 
-    def _build_message(
+    def _base_message(
         self,
         *,
         to: str,
+        to_name: str | None = None,
         reply_to: str,
         subject: str,
-        text: str,
-        html: str | None = None,
-        attachments: list[str] | None = None,
-    ) -> tuple[MessageSchema, str]:
+        plain_text_content: str | None = None,
+    ) -> tuple[Mail, str]:
         message_id = self._message_id()
-        body = html or text
-        subtype = MessageType.html if html else MessageType.plain
-        alternative_body = text if html else None
-        multipart_subtype = (
-            MultipartSubtypeEnum.alternative if alternative_body else MultipartSubtypeEnum.mixed
-        )
-        message = MessageSchema(
-            recipients=[to],
-            reply_to=[reply_to],
+        message = Mail(
+            from_email=self._sender(),
+            to_emails=To(to, to_name),
             subject=subject,
-            body=body,
-            alternative_body=alternative_body,
-            subtype=subtype,
-            multipart_subtype=multipart_subtype,
-            attachments=attachments or [],
-            headers={_TRACKING_HEADER: message_id},
+            plain_text_content=plain_text_content,
         )
+        message.reply_to = ReplyTo(reply_to)
+        message.add_header(Header(_TRACKING_HEADER, message_id))
         return message, message_id
 
     async def send_chetan_details(self, lead: Lead) -> str:
         s = self.settings
-        ctx = {
+        message, message_id = self._base_message(
+            to=lead.email,
+            to_name=lead.name,
+            reply_to=s.chetan_email,
+            subject="Chetan Marathe - details you requested",
+        )
+        message.template_id = s.sendgrid_template_id
+        message.dynamic_template_data = {
+            "leadName": lead.name,
             "name": lead.name,
             "company": lead.company,
             "email": s.chetan_email,
             "phone": s.chetan_phone if s.include_phone_in_email else "",
+            "resumeUrl": s.chetan_resume_url,
             "resume_url": s.chetan_resume_url,
+            "portfolioUrl": s.chetan_portfolio_url,
             "portfolio_url": s.chetan_portfolio_url,
+            "linkedinUrl": s.chetan_linkedin_url,
             "linkedin_url": s.chetan_linkedin_url,
+            "githubUrl": s.chetan_github_url,
             "github_url": s.chetan_github_url,
+            "leetcodeUrl": s.chetan_leetcode_url,
             "leetcode_url": s.chetan_leetcode_url,
         }
-        html = _jinja.get_template("chetan_details.html").render(**ctx)
-        text = _jinja.get_template("chetan_details.txt").render(**ctx)
 
-        message, message_id = self._build_message(
-            to=lead.email,
-            reply_to=s.chetan_email,
-            subject="Chetan Marathe — details you requested",
-            text=text,
-            html=html,
-            attachments=self._resume_attachments(),
-        )
-        msg_id = await self._send_message(message, message_id)
-        logger.info(f"Sent details email to {lead.email} (msg_id={msg_id})")
+        attachment = self._resume_attachment()
+        if attachment:
+            message.add_attachment(attachment)
+
+        msg_id = await self._send_message(message, message_id, require_template=True)
+        logger.info(f"Sent SendGrid details email to {lead.email} (msg_id={msg_id})")
         return msg_id
 
     async def notify_chetan_new_lead(self, lead: Lead) -> str | None:
@@ -165,11 +188,11 @@ class EmailClient:
             f"Wanted details emailed at notification time: {details_status}\n\n"
             f"This is an internal notification. Use Reply to email the lead directly.\n"
         )
-        message, message_id = self._build_message(
+        message, message_id = self._base_message(
             to=s.chetan_email,
             reply_to=lead.email,
             subject=f"[chetanOS] New lead: {lead.name} from {lead.company}",
-            text=body,
+            plain_text_content=body,
         )
         try:
             return await self._send_message(message, message_id)
