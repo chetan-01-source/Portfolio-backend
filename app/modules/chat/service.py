@@ -14,7 +14,7 @@ from app.core.logging import logger
 from app.llm.openrouter import OpenRouterClient
 from app.modules.chat.repository import ChatRepository
 from app.rag.embeddings import Embedder
-from app.rag.prompt import build_messages
+from app.rag.prompt import build_messages, build_rewrite_messages
 from app.rag.retriever import Retriever
 
 _HISTORY_TURN_LIMIT = 8
@@ -24,6 +24,16 @@ _UNHELPFUL_ASSISTANT_MEMORY = (
     "i don't have that on file",
     "best to ask chetan directly",
 )
+
+# References that signal a follow-up needs reframing against prior turns.
+_REFERENCE_PATTERN = re.compile(
+    r"\b(this|that|these|those|it|its|he|him|his|there|same|above|previous|earlier|the project|the role|the company)\b",
+    re.IGNORECASE,
+)
+
+
+def _needs_rewrite(message: str) -> bool:
+    return bool(_REFERENCE_PATTERN.search(message))
 
 # ── Hire-intent detection ──────────────────────────────────────────
 # Fast keyword-based check. Runs before any LLM call so it's zero-cost.
@@ -155,8 +165,29 @@ class ChatService:
         # contamination (e.g. Schbang overview cached → CSAT question
         # returned the Schbang answer because the history blob matched).
         user_query = message
-        retrieval_query = _contextual_query(message, conversation_summary)
         has_memory = bool(conversation_summary)
+
+        # Resolve follow-up references ("this project", "that role") against the
+        # conversation summary so retrieval gets a self-contained query.
+        rewritten_query = message
+        if has_memory and _needs_rewrite(message):
+            try:
+                rewrite_msgs = build_rewrite_messages(
+                    message, conversation_summary=conversation_summary
+                )
+                rewrite_res = await self.llm.complete(
+                    model=model,
+                    messages=rewrite_msgs,
+                    temperature=0.0,
+                    max_tokens=60,
+                )
+                candidate = (rewrite_res.text or "").strip().strip('"').strip("'")
+                if candidate:
+                    rewritten_query = candidate
+            except Exception as e:
+                logger.warning(f"query rewrite failed: {e}")
+
+        retrieval_query = _contextual_query(rewritten_query, conversation_summary)
 
         # Log user turn first.
         await self.repo.insert_log(session_id=session_id, role="user", content=message)

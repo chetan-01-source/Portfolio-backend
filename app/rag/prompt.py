@@ -16,7 +16,11 @@ def format_chunks(docs: list[dict]) -> str:
         tag = payload.get("kind") or payload.get("source", "doc")
         name = payload.get("section") or payload.get("name") or ""
         head = f"[{i}] ({tag}{':' + name if name else ''})"
-        parts.append(f"{head}\n{d.get('text', '').strip()}")
+        body = d.get("text", "").strip()
+        repo_url = payload.get("repo_url")
+        if repo_url and "Repository:" not in body:
+            body += f"\n\nLinks:\n- Repository: {repo_url}"
+        parts.append(f"{head}\n{body}")
     return "\n\n".join(parts)
 
 
@@ -36,5 +40,7 @@ def build_messages(
     ]
 
 
-def build_rewrite_messages(query: str) -> list[dict[str, str]]:
-    return [{"role": "user", "content": _REWRITE.replace("{query}", query)}]
+def build_rewrite_messages(query: str, *, conversation_summary: str = "") -> list[dict[str, str]]:
+    chat_summary = conversation_summary.strip() or "No prior conversation in this session."
+    content = _REWRITE.replace("{chat_summary}", chat_summary).replace("{query}", query)
+    return [{"role": "user", "content": content}]

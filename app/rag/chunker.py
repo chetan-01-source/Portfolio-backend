@@ -75,19 +75,25 @@ def chunk_markdown_sections(
 
 
 def chunk_project(project: dict[str, Any]) -> Chunk:
-    """One chunk per project — summary + stack + highlights."""
+    """One chunk per project — summary + stack + highlights + repo link."""
     name = project.get("name", "Untitled")
     summary = project.get("summary", "")
     stack = ", ".join(project.get("stack", []) or [])
     highlights = "\n".join(f"- {h}" for h in project.get("highlights", []) or [])
+    repo_url = project.get("repo_url")
+
     body = f"# {name}\n\n{summary}\n\nStack: {stack}\n\nHighlights:\n{highlights}"
-    return Chunk(
-        text=body,
-        metadata={
-            "source": "projects.yaml",
-            "kind": "project",
-            "tags": project.get("tags", []),
-            "year": project.get("year"),
-            "name": name,
-        },
-    )
+    if repo_url:
+        body += f"\n\nLinks:\n- Repository: {repo_url}"
+
+    metadata: dict[str, Any] = {
+        "source": "projects.yaml",
+        "kind": "project",
+        "tags": project.get("tags", []),
+        "year": project.get("year"),
+        "name": name,
+    }
+    if repo_url:
+        metadata["repo_url"] = repo_url
+
+    return Chunk(text=body, metadata=metadata)

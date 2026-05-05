@@ -5,6 +5,7 @@
   stack: [FastAPI, MongoDB, Qdrant, Redis, OpenRouter, Gmail SMTP, DeepEval]
   tags: [rag, fastapi, mongodb, llm, vector-search]
   year: 2026
+  repo_url: https://github.com/chetan-01-source/Portfolio-backend
   highlights:
     - Two-tier cache (exact + RediSearch semantic) cuts per-query cost by ~70%
     - Controller / service / repository layering enforced by import-linter
@@ -16,6 +17,7 @@
   stack: [React, Vite, Tailwind]
   tags: [frontend, portfolio]
   year: 2026
+  repo_url: https://github.com/chetan-01-source/Portfolio-backend
   highlights:
     - SSE consumer for token-streamed chat
     - Inline Hire-Me flow rendered as conversational bubbles
@@ -26,6 +28,7 @@
   stack: [React.js, CometChat UIKit, CometChat SDK, FCM (Firebase Cloud Messaging)]
   tags: [frontend, real-time, chat, cometchat]
   year: 2025
+  repo_url: https://github.com/chetan-01-source/shush-chat
   highlights:
     - Built 1:1 and group chat with real-time presence, typing indicators, and media sharing
     - Customized and extended CometChat UIKit with tailored components and advanced SDK features
@@ -40,6 +43,7 @@
   stack: [MongoDB, Express.js, React.js, Node.js, Socket.IO, Redis, Twilio]
   tags: [fullstack, mern, microservices, real-time]
   year: 2024
+  repo_url: https://github.com/chetan-01-source/shush-chat
   highlights:
     - PolyRepo microservice architecture with separate services for auth, blogs, messaging, and connections
     - Engineered scalable APIs with cursor-based pagination
@@ -54,6 +58,7 @@
   stack: [React.js, TypeScript, Python, FastAPI, MongoDB, Google Gemini API]
   tags: [ai, fullstack, enterprise, campaign-management]
   year: 2025
+  repo_url: https://github.com/chetan-01-source/britannia-Campaign-engine-backend  # internal / NDA
   highlights:
     - AI-powered concept pillar generation using brand DNA and summaries
     - Competitive analysis and trend tracking for brand campaigns

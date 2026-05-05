@@ -108,3 +108,11 @@
 - `tests/modules/chat/test_service_memory.py` — 7 tests: follow-up skips cache, standalone uses cache, cache never stores history, exact cache uses raw message, regression test.
 
 **Result:** 79/79 tests pass. RediSearch index dropped and recreated with `entities` field. All cache entries flushed.
+
+## 2026-05-04: Generate Detailed LinkedIn Post on RAG Optimization
+
+**Changes:**
+- Rewrote `linkedin_post.md` to provide a highly detailed, professional, and engaging overview of the portfolio's RAG backend architecture.
+- Outlined the tech stack (FastAPI, Qdrant, Redis RediSearch, OpenRouter, SSE).
+- Deeply explained the 3-stage Semantic Caching system (Exact Match, Vector Similarity, Entity Conflict Gate, and Keyword Overlap) that achieves O(1) lookups and drastically reduces token spending.
+- Highlighted the advanced retrieval pipeline featuring MMR (Maximal Marginal Relevance), Kind-Based Boosting, and Cross-Encoder Reranking for context compression.
